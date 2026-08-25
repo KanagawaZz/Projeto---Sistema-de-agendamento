@@ -1,0 +1,59 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Novo agendamento | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="admin-shell narrow-shell">
+    <a class="back-link" href="{% url 'appointment_list' %}">← Agenda</a>
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Agenda</p>
+            <h1>Novo agendamento</h1>
+            <p class="muted">Reserve um horário para um cliente.</p>
+        </div>
+    </div>
+
+    <form method="get" class="form-panel stack-form">
+        <div>
+            <label for="id_service">Serviço</label>
+            <select id="id_service" name="service" required>
+                <option value="">Selecione um serviço</option>
+                {% for service in form.fields.service.queryset %}
+                <option value="{{ service.id }}"{% if selected_service|stringformat:'s' == service.id|stringformat:'s' %} selected{% endif %}>{{ service.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="id_date">Data</label>
+            <input id="id_date" type="date" name="date" value="{{ selected_date }}" required>
+        </div>
+        <button class="button button-secondary" type="submit">Ver horários</button>
+    </form>
+
+    {% if form.available_times %}
+    <form method="post" class="form-panel stack-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <input type="hidden" name="service" value="{{ selected_service }}">
+        <input type="hidden" name="date" value="{{ selected_date }}">
+        <div>
+            <label for="id_start_datetime">Horário</label>
+            <select id="id_start_datetime" name="start_datetime" required>
+                {% for value, label in form.fields.start_datetime.choices %}
+                <option value="{{ value }}"{% if form.start_datetime.value == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {{ form.client_name.errors }}
+        <label for="id_client_name">Nome do cliente</label>
+        {{ form.client_name }}
+        {{ form.client_phone.errors }}
+        <label for="id_client_phone">Telefone do cliente</label>
+        {{ form.client_phone }}
+        <button class="button button-primary" type="submit">Confirmar agendamento</button>
+    </form>
+    {% elif selected_service and selected_date %}
+    <p class="empty-state">Nenhum horário disponível para essa combinação.</p>
+    {% endif %}
+</div>
+{% endblock %}

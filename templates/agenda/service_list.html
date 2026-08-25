@@ -1,0 +1,28 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Serviços | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="admin-shell">
+    <div class="page-heading">
+        <div><p class="eyebrow">Catálogo</p><h1>Serviços</h1><p class="muted">O que você oferece em {{ business.name }}.</p></div>
+        <a class="button button-primary" href="{% url 'service_create' %}">+ Novo serviço</a>
+    </div>
+    {% if services %}
+    <ul class="admin-list">
+        {% for service in services %}
+        <li class="admin-list-item">
+            <div class="list-main"><h2>{{ service.name }}</h2><span class="status-pill {% if service.is_active %}status-active{% else %}status-muted{% endif %}">{% if service.is_active %}Ativo{% else %}Inativo{% endif %}</span><p>R$ {{ service.price }} <span class="dot">·</span> {{ service.operational_minutes }} min operacionais</p></div>
+            <div class="list-actions"><a class="text-link" href="{% url 'service_edit' service.id %}">Editar</a>
+                <form method="post" action="{% url 'service_toggle' service.id %}">
+                    {% csrf_token %}<button class="button button-small button-quiet" type="submit">{% if service.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state"><h2>Nenhum serviço cadastrado ainda.</h2><p>Adicione seu primeiro serviço para começar a receber reservas.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

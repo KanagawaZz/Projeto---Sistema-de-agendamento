@@ -1,0 +1,49 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Agendamentos | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="admin-shell">
+    <div class="page-heading"><div><p class="eyebrow">Agenda do dia</p><h1>{{ selected_date|date:'l, d \d\e F' }}</h1><p class="muted">Atendimentos de {{ business.name }}.</p></div><a class="button button-primary" href="{% url 'appointment_create' %}">Novo agendamento</a></div>
+    <div class="agenda-toolbar">
+        <a class="button button-quiet" href="?date={{ previous_date|date:'Y-m-d' }}">Dia anterior</a>
+        <a class="button button-secondary" href="?date={{ now|date:'Y-m-d' }}">Hoje</a>
+        <form method="get" class="agenda-date-form">
+            <label for="agenda-date">Escolher data</label>
+            <input id="agenda-date" type="date" name="date" value="{{ selected_date_value }}">
+            <button class="button button-quiet" type="submit">Ver dia</button>
+        </form>
+        <a class="button button-quiet" href="?date={{ next_date|date:'Y-m-d' }}">Próximo dia</a>
+        <button class="button button-quiet print-button" type="button" onclick="window.print()">Imprimir</button>
+    </div>
+    {% if appointments %}
+    <ul class="admin-list appointment-list">
+        {% for appointment in appointments %}
+        <li class="admin-list-item appointment-item">
+            <div class="appointment-time"><strong>{{ appointment.start_datetime|date:'d/m/Y' }}</strong><span>{{ appointment.start_datetime|date:'H:i' }}</span></div>
+            <div class="list-main"><h2>{{ appointment.service.name }}</h2><p>{{ appointment.client_name }} <span class="dot">·</span> {{ appointment.client_phone }}</p>{% if appointment.customer and appointment.customer.completed_count %}<p class="customer-history">{{ appointment.customer.completed_count }} atendimento{{ appointment.customer.completed_count|pluralize }} concluído{{ appointment.customer.completed_count|pluralize }}{% if appointment.customer.last_completed_service %} <span class="dot">·</span> último: {{ appointment.customer.last_completed_service }}{% endif %}</p>{% endif %}</div>
+            <span class="status-pill {% if appointment.status == 'confirmed' %}status-active{% else %}status-muted{% endif %}">{{ appointment.get_status_display }}</span>
+            {% if appointment.customer_whatsapp_link %}<a class="button button-small button-whatsapp" href="{{ appointment.customer_whatsapp_link }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+            {% if appointment.status == 'confirmed' and appointment.start_datetime > now %}
+            <form method="post" action="{% url 'appointment_cancel' appointment.id %}">
+                {% csrf_token %}<button class="button button-small button-quiet" type="submit">Cancelar</button>
+            </form>
+            {% endif %}
+            {% if appointment.status == 'confirmed' and appointment.start_datetime <= now %}
+            <div class="appointment-status-actions">
+                <form method="post" action="{% url 'appointment_update_status' appointment.id 'completed' %}">
+                    {% csrf_token %}<button class="button button-small button-quiet" type="submit">Concluído</button>
+                </form>
+                <form method="post" action="{% url 'appointment_update_status' appointment.id 'no_show' %}">
+                    {% csrf_token %}<button class="button button-small button-quiet" type="submit">Não compareceu</button>
+                </form>
+            </div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state"><h2>Nenhum agendamento neste dia</h2><p>Escolha outra data ou crie um novo agendamento para {{ selected_date|date:'d/m/Y' }}.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

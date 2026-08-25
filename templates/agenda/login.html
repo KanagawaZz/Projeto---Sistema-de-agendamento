@@ -1,0 +1,23 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Entrar | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="auth-layout">
+    <section class="auth-intro">
+        <p class="eyebrow">Gestão sem ruído</p>
+        <h1>Seu tempo merece uma agenda mais leve.</h1>
+        <p>Organize serviços, horários e reservas em um só lugar.</p>
+    </section>
+    <section class="form-panel auth-card">
+        <p class="eyebrow">Bem-vindo de volta</p>
+        <h2>Entrar no painel</h2>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button class="button button-primary" type="submit">Entrar</button>
+        </form>
+        <p class="form-footer">Ainda não tem uma conta? <a href="{% url 'signup' %}">Criar uma conta</a></p>
+    </section>
+</div>
+{% endblock %}

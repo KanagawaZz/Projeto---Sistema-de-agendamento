@@ -1,0 +1,34 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}{{ page.display_title }} | Agenda Fácil{% endblock %}
+
+{% block content %}
+<section class="landing-hero theme-{{ page.theme }}">
+    <p class="eyebrow">Atendimento com hora marcada</p>
+    <h1>{{ page.display_title }}</h1>
+    {% if page.display_description %}<p class="landing-description">{{ page.display_description }}</p>{% endif %}
+    <a class="button button-primary" href="#services">{{ page.cta_label }}</a>
+</section>
+
+<section class="landing-services" id="services">
+    <div class="section-heading">
+        <p class="eyebrow">Serviços</p>
+        <h2>Escolha como quer ser atendido</h2>
+    </div>
+    <ul class="service-grid">
+    {% for service in services %}
+    <li class="service-card">
+        <div>
+            <h3>{{ service.name }}</h3>
+            {% if service.description %}<p>{{ service.description }}</p>{% endif %}
+            <span>R$ {{ service.price }} · {{ service.duration_minutes }} min</span>
+        </div>
+        <a class="button button-secondary" href="{% url 'public_booking' business.slug service.id %}">Agendar</a>
+    </li>
+    {% empty %}
+    <li class="empty-state">Nenhum serviço disponível no momento.</li>
+    {% endfor %}
+</ul>
+</section>
+<footer class="landing-footer">{{ business.name }} · Agenda Fácil</footer>
+{% endblock %}

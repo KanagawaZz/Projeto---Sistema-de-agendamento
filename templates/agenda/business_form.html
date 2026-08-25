@@ -1,0 +1,18 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Negócio | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="admin-shell narrow-shell">
+    <div class="page-heading compact-heading">
+        <div><p class="eyebrow">Seu negócio</p><h1>{% if business %}Editar informações{% else %}Cadastrar negócio{% endif %}</h1></div>
+        <a class="text-link" href="{% url 'dashboard' %}">Voltar ao painel</a>
+    </div>
+    <form method="post" class="form-panel stack-form">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="button button-primary" type="submit">Salvar informações</button>
+    </form>
+    {% if business %}<div class="notice"><span>Link público</span><a href="{% url 'public_services' business.slug %}">{% url 'public_services' business.slug %}</a></div>{% endif %}
+</div>
+{% endblock %}

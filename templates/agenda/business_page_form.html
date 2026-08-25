@@ -1,0 +1,18 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Página pública | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="admin-shell narrow-shell">
+    <p class="eyebrow">Presença digital</p>
+    <h1>Página pública</h1>
+    <p class="muted">Personalize a apresentação do seu negócio sem inserir código.</p>
+    <form method="post" class="form-panel stack-form">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="button button-primary" type="submit">Salvar página</button>
+    </form>
+    <p><a href="{% url 'public_services' business.slug %}" target="_blank" rel="noopener">Visualizar página pública</a></p>
+    <p><a href="{% url 'dashboard' %}">Voltar ao painel</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Agendamento confirmado | {{ appointment.business.name }}{% endblock %}
+
+{% block content %}
+<div class="public-shell narrow-public"><div class="success-panel"><span class="success-mark">✓</span><p class="eyebrow">Tudo certo</p><h1>Agendamento confirmado</h1><p>{{ appointment.client_name }}, seu horário está reservado.</p><div class="booking-summary"><span>{{ appointment.service.name }}</span><strong>{{ appointment.start_datetime|date:'d/m/Y · H:i' }}</strong></div><div class="confirmation-actions"><a class="button button-primary" href="{% url 'cancel_appointment' appointment.cancellation_token %}">Gerenciar agendamento</a>{% if whatsapp_link %}<a class="button button-secondary" href="{{ whatsapp_link }}" target="_blank" rel="noopener">Falar pelo WhatsApp</a>{% endif %}</div></div></div>
+{% endblock %}

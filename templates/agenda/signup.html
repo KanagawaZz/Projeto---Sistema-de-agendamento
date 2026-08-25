@@ -1,0 +1,23 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Criar conta | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="auth-layout">
+    <section class="auth-intro">
+        <p class="eyebrow">Comece por aqui</p>
+        <h1>Uma agenda clara para um negócio que cresce.</h1>
+        <p>Configure sua presença, publique seus serviços e receba reservas.</p>
+    </section>
+    <section class="form-panel auth-card">
+        <p class="eyebrow">Primeiro passo</p>
+        <h2>Criar sua conta</h2>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button class="button button-primary" type="submit">Criar conta</button>
+        </form>
+        <p class="form-footer">Já tem uma conta? <a href="{% url 'login' %}">Entrar</a></p>
+    </section>
+</div>
+{% endblock %}

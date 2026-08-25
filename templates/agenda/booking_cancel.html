@@ -1,0 +1,17 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Cancelar agendamento | {{ appointment.business.name }}{% endblock %}
+
+{% block content %}
+<div class="public-shell narrow-public"><div class="success-panel"><p class="eyebrow">Seu agendamento</p><h1>Cancelar horário?</h1><div class="booking-summary"><span>{{ appointment.service.name }}</span><strong>{{ appointment.start_datetime|date:'d/m/Y · H:i' }}</strong></div>
+{% if error %}
+<p>{{ error }}</p>
+{% elif appointment.status == 'cancelled' %}
+<p>Este agendamento já está cancelado.</p>
+{% else %}
+<form method="post">
+    {% csrf_token %}
+    <button class="button button-danger" type="submit">Confirmar cancelamento</button>
+</form>
+{% endif %}</div></div>
+{% endblock %}
