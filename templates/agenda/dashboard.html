@@ -1,0 +1,93 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Início | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="admin-shell dashboard-shell">
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Visão geral</p>
+            <h1>Olá, {{ user.username }}.</h1>
+            <p class="muted">Aqui está o centro de operação de <strong>{{ business.name }}</strong>.</p>
+        </div>
+        <a class="button button-primary" href="{% url 'public_services' business.slug %}" target="_blank" rel="noopener">Ver página pública</a>
+    </div>
+    {% if notifications %}
+    <section class="notification-panel" aria-labelledby="notification-title">
+        <div class="section-heading compact-heading"><div><p class="eyebrow">Atividade recente</p><h2 id="notification-title">Notificações</h2></div></div>
+        <ul class="notification-list">
+            {% for notification in notifications %}
+            <li class="notification-item{% if not notification.is_read %} notification-unread{% endif %}">
+                <div><strong>{{ notification.title }}</strong><p>{{ notification.message }}</p></div>
+                <time datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:'d/m H:i' }}</time>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+    <section class="dashboard-insights" aria-labelledby="insights-title">
+        <div class="section-heading compact-heading"><div><p class="eyebrow">Histórico</p><h2 id="insights-title">O que está acontecendo no negócio</h2><p class="muted">Ranking acumulado de atendimentos concluídos.</p></div></div>
+        <div class="insights-grid">
+            <div class="insight-panel">
+                <h3>Clientes mais frequentes</h3>
+                {% if top_customers %}
+                <ol class="ranking-list">
+                    {% for customer in top_customers %}
+                    <li><span><strong>{{ customer.name }}</strong><small>{{ customer.phone }}</small></span><b>{{ customer.completed_total }}</b></li>
+                    {% endfor %}
+                </ol>
+                {% else %}<p class="insight-empty">Os clientes recorrentes aparecerão após os atendimentos concluídos.</p>{% endif %}
+            </div>
+            <div class="insight-panel">
+                <h3>Serviços mais realizados</h3>
+                {% if top_services %}
+                <ol class="ranking-list">
+                    {% for service in top_services %}
+                    <li><span><strong>{{ service.name }}</strong><small>Atendimentos concluídos</small></span><b>{{ service.completed_total }}</b></li>
+                    {% endfor %}
+                </ol>
+                {% else %}<p class="insight-empty">Os serviços mais realizados aparecerão após os atendimentos concluídos.</p>{% endif %}
+            </div>
+        </div>
+    </section>
+    <section class="dashboard-grid">
+        <a class="feature-card feature-card-main" href="{% url 'appointment_list' %}">
+            <span class="card-icon">01</span>
+            <h2>Agenda</h2>
+            <p>Veja reservas, clientes e próximos atendimentos.</p>
+            <span class="card-link">Abrir agenda <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="feature-card" href="{% url 'business_page_form' %}">
+            <span class="card-icon">02</span>
+            <h2>Página pública</h2>
+            <p>Apresente seu negócio e direcione clientes para o agendamento.</p>
+            <span class="card-link">Personalizar <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="feature-card" href="{% url 'service_list' %}">
+            <span class="card-icon">03</span>
+            <h2>Serviços</h2>
+            <p>Controle o que você oferece, preços e tempo de atendimento.</p>
+            <span class="card-link">Gerenciar <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="feature-card" href="{% url 'working_hours' %}">
+            <span class="card-icon">04</span>
+            <h2>Horários</h2>
+            <p>Defina sua semana de trabalho com flexibilidade.</p>
+            <span class="card-link">Configurar <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="feature-card" href="{% url 'whatsapp_settings' %}">
+            <span class="card-icon">05</span>
+            <h2>Lembretes WhatsApp</h2>
+            <p>Conecte seu número e acompanhe a configuração dos avisos automáticos.</p>
+            <span class="card-link">Configurar <span aria-hidden="true">→</span></span>
+        </a>
+    </section>
+    <div class="dashboard-footer">
+        <a href="{% url 'business_form' %}">Editar informações do negócio</a>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="button button-quiet" type="submit">Sair</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

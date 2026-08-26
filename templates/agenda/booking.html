@@ -1,0 +1,39 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Agendar {{ service.name }} | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="public-shell booking-shell">
+    <a class="back-link" href="{% url 'public_services' business.slug %}">← {{ business.name }}</a>
+    <div class="booking-heading"><p class="eyebrow">Agendamento</p><h1>{{ service.name }}</h1><p class="muted">Escolha um dia e encontre um horário tranquilo para você.</p><div class="service-meta"><span>R$ {{ service.price }}</span><span>{{ service.duration_minutes }} min de atendimento</span>{% if service.buffer_minutes %}<span>+ {{ service.buffer_minutes }} min de preparo</span>{% endif %}</div></div>
+<form method="get" class="date-picker form-panel">
+    <label for="date">Data</label>
+    <input id="date" type="date" name="date" value="{{ selected_date }}" required>
+    <button class="button button-primary" type="submit">Ver horários</button>
+</form>
+
+{% if selected_date %}
+<h3 class="subheading">Horários disponíveis</h3>
+{% if available_times %}
+<form method="post" class="form-panel stack-form booking-form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ form.as_p }}
+    <fieldset class="time-picker">
+        <legend>Escolha um horário</legend>
+        <div class="time-grid">
+        {% for available_time in available_times %}
+        <label class="time-option"><input type="radio" name="start_datetime" value="{{ available_time|date:'Y-m-d\\TH:i' }}" required{% if forloop.first %} checked{% endif %}><span>{{ available_time|date:'H:i' }}</span></label>
+        {% endfor %}
+        </div>
+    </fieldset>
+    <input type="hidden" name="date" value="{{ selected_date }}">
+    <p class="muted">O lembrete automático só será enviado se você autorizar o recebimento pelo WhatsApp.</p>
+    <button class="button button-primary" type="submit">Confirmar agendamento</button>
+</form>
+{% else %}
+<p>Nenhum horário disponível nesta data.</p>
+{% endif %}
+{% endif %}
+</div>
+{% endblock %}

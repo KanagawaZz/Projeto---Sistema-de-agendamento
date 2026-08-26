@@ -1,0 +1,79 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Horários de funcionamento | Agenda Fácil{% endblock %}
+
+{% block content %}
+<div class="admin-shell">
+    <div class="page-heading"><div><p class="eyebrow">Disponibilidade</p><h1>Horários de funcionamento</h1><p class="muted">Monte uma semana que combina com o ritmo de {{ business.name }}.</p></div><a class="text-link" href="{% url 'dashboard' %}">Voltar ao painel</a></div>
+<form method="post" class="hours-form">
+    {% csrf_token %}
+    {% for day, day_name, day_form, hours_formset in forms_data %}
+    <section class="day-card">
+        <div class="day-heading"><div><span class="day-number">0{{ forloop.counter }}</span><h2>{{ day_name }}</h2></div><div class="closed-toggle">{{ day_form.is_closed }}<label for="{{ day_form.is_closed.id_for_label }}">Fechado</label></div></div>
+        <div class="hours-group" data-prefix="{{ hours_formset.prefix }}">
+            {{ hours_formset.management_form }}
+            {% for hour_form in hours_formset %}
+            <div class="interval-row">
+                {{ hour_form.id }}
+                <label>Início {{ hour_form.start_time }}</label>
+                <label>Fim {{ hour_form.end_time }}</label>
+                {% if hour_form.instance.pk %}
+                {{ hour_form.DELETE }}
+                {% endif %}
+                <button type="button" class="remove-interval">Remover</button>
+                {{ hour_form.errors }}
+            </div>
+            {% endfor %}
+            <template class="empty-interval">
+                <div class="interval-row">
+                    <label>Início {{ hours_formset.empty_form.start_time }}</label>
+                    <label>Fim {{ hours_formset.empty_form.end_time }}</label>
+                    <button type="button" class="remove-interval">Remover</button>
+                </div>
+            </template>
+            <button type="button" class="add-interval button button-small button-quiet">+ Adicionar intervalo</button>
+        </div>
+        {{ day_form.non_field_errors }}
+        {{ hours_formset.non_form_errors }}
+    </section>
+    {% endfor %}
+    <button class="button button-primary" type="submit">Salvar horários</button>
+</form>
+</div>
+<script>
+    document.querySelectorAll('.hours-group').forEach(function (group) {
+        const prefix = group.dataset.prefix;
+        const totalForms = group.querySelector('#id_' + prefix + '-TOTAL_FORMS');
+        const template = group.querySelector('.empty-interval');
+
+        group.querySelector('.add-interval').addEventListener('click', function () {
+            const index = Number(totalForms.value);
+            const html = template.innerHTML.replaceAll('__prefix__', index);
+            template.insertAdjacentHTML('beforebegin', html);
+            totalForms.value = index + 1;
+            bindRemoveButtons(group);
+        });
+
+        bindRemoveButtons(group);
+    });
+
+    function bindRemoveButtons(group) {
+        group.querySelectorAll('.remove-interval').forEach(function (button) {
+            if (button.dataset.bound) {
+                return;
+            }
+            button.dataset.bound = 'true';
+            button.addEventListener('click', function () {
+                const row = button.closest('.interval-row');
+                const deleteInput = row.querySelector('input[name$="-DELETE"]');
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                    row.hidden = true;
+                } else {
+                    row.remove();
+                }
+            });
+        });
+    }
+</script>
+{% endblock %}
