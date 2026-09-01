@@ -1,0 +1,27 @@
+{% extends 'agenda/base.html' %}
+
+{% block title %}Histórico de lembretes | {{ business.name }}{% endblock %}
+
+{% block content %}
+<div class="admin-shell">
+    <div class="page-heading">
+        <div><p class="eyebrow">Lembretes automáticos</p><h1>Histórico de envios</h1><p class="muted">Acompanhe os lembretes de {{ business.name }}.</p></div>
+        <a class="button button-primary" href="{% url 'whatsapp_settings' %}">Configurar WhatsApp</a>
+    </div>
+    {% if reminders %}
+    <ul class="admin-list appointment-list">
+        {% for reminder in reminders %}
+        <li class="admin-list-item appointment-item">
+            <div class="appointment-time"><strong>{{ reminder.appointment.start_datetime|date:'d/m/Y' }}</strong><span>{{ reminder.appointment.start_datetime|date:'H:i' }}</span></div>
+            <div class="list-main"><h2>{{ reminder.appointment.client_name }}</h2><p>{{ reminder.appointment.service.name }} <span class="dot">·</span> {{ reminder.appointment.client_phone }}</p><small class="muted">Criado em {{ reminder.created_at|date:'d/m/Y H:i' }}{% if reminder.sent_at %} <span class="dot">·</span> Enviado em {{ reminder.sent_at|date:'d/m/Y H:i' }}{% endif %}</small></div>
+            <span class="status-pill {% if reminder.status == 'sent' %}status-active{% else %}status-muted{% endif %}">{{ reminder.get_status_display }}</span>
+            <span class="muted">Tentativas: {{ reminder.attempt_count }}</span>
+            {% if reminder.last_error %}<p class="notice notice-error">{{ reminder.last_error }}</p>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state"><h2>Nenhum lembrete registrado</h2><p>Os lembretes aparecerão aqui quando houver agendamentos com consentimento.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+services:
+  evolution-api:
+    image: ${EVOLUTION_IMAGE:-evoapicloud/evolution-api:latest}
+    container_name: agenda-evolution-api
+    restart: unless-stopped
+    env_file:
+      - .env.evolution
+    ports:
+      - "${EVOLUTION_BIND_ADDRESS:-127.0.0.1}:${EVOLUTION_PORT:-8080}:8080"
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evolution-network
+
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: agenda-evolution-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-evolution}
+      POSTGRES_USER: ${POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env.evolution}
+    volumes:
+      - evolution_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - evolution-network
+
+volumes:
+  evolution_instances:
+  evolution_db:
+
+networks:
+  evolution-network:
+    driver: bridge

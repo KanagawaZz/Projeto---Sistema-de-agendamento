@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from datetime import datetime
@@ -9,28 +11,50 @@ from .services import get_available_start_times
 
 
 class BusinessForm(forms.ModelForm):
+	ALLOWED_REMINDER_PLACEHOLDERS = {'{cliente}', '{servico}', '{data}', '{hora}', '{negocio}'}
+
 	class Meta:
 		model = Business
-		fields = ('name', 'description', 'whatsapp_phone', 'whatsapp_reminders_enabled', 'whatsapp_reminder_lead_time_minutes')
+		fields = (
+			'name',
+			'description',
+			'whatsapp_phone',
+			'whatsapp_reminders_enabled',
+			'whatsapp_reminder_lead_time_minutes',
+			'whatsapp_reminder_message',
+		)
 		labels = {
 			'name': 'Nome do negócio',
 			'description': 'Descrição',
 			'whatsapp_phone': 'WhatsApp do negócio',
 			'whatsapp_reminders_enabled': 'Ativar lembretes automáticos',
 			'whatsapp_reminder_lead_time_minutes': 'Enviar lembrete com antecedência (minutos)',
+			'whatsapp_reminder_message': 'Mensagem do lembrete',
 		}
 		widgets = {
 			'description': forms.Textarea(attrs={'rows': 4}),
 			'whatsapp_phone': forms.TextInput(attrs={'placeholder': '(11) 99999-9999'}),
 			'whatsapp_reminder_lead_time_minutes': forms.NumberInput(attrs={'min': 5, 'max': 1440}),
+			'whatsapp_reminder_message': forms.Textarea(attrs={'rows': 4}),
 		}
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.fields['whatsapp_reminder_lead_time_minutes'].required = False
+		self.fields['whatsapp_reminder_message'].required = False
 
 	def clean_whatsapp_reminder_lead_time_minutes(self):
 		return self.cleaned_data.get('whatsapp_reminder_lead_time_minutes') or 20
+
+	def clean_whatsapp_reminder_message(self):
+		message = self.cleaned_data.get('whatsapp_reminder_message', '').strip()
+		if not message:
+			return self.Meta.model._meta.get_field('whatsapp_reminder_message').default
+		placeholders = set(re.findall(r'\{[^{}]+\}', message))
+		invalid = placeholders - self.ALLOWED_REMINDER_PLACEHOLDERS
+		if invalid:
+			raise forms.ValidationError('Use somente: {cliente}, {servico}, {data}, {hora} e {negocio}.')
+		return message
 
 
 class ServiceForm(forms.ModelForm):
@@ -143,12 +167,12 @@ class BusinessPageForm(forms.ModelForm):
 class WhatsAppIntegrationForm(forms.ModelForm):
 	class Meta:
 		model = WhatsAppIntegration
-		fields = ('phone_number_id',)
+		fields = ('instance_name',)
 		labels = {
-			'phone_number_id': 'ID do número na Meta',
+			'instance_name': 'Nome da instância Evolution',
 		}
 		widgets = {
-			'phone_number_id': forms.TextInput(attrs={'placeholder': 'Ex.: 123456789012345'}),
+			'instance_name': forms.TextInput(attrs={'placeholder': 'Ex.: agenda-facil-negocio-1'}),
 		}
 
 

@@ -34,13 +34,23 @@ class Command(BaseCommand):
 			reminder_at = appointment.start_datetime - timedelta(
 				minutes=appointment.business.whatsapp_reminder_lead_time_minutes,
 			)
-			if (
-				appointment.status != Appointment.Status.CONFIRMED
-				or not appointment.business.whatsapp_reminders_enabled
-				or not appointment.whatsapp_reminder_opt_in
-				or now < reminder_at
-				or now >= appointment.start_datetime
-			):
+			if appointment.status != Appointment.Status.CONFIRMED:
+				self._cancel(reminder.pk, 'Agendamento não está confirmado.', now)
+				counters['skipped'] += 1
+				continue
+			if not appointment.business.whatsapp_reminders_enabled:
+				self._cancel(reminder.pk, 'Lembretes automáticos estão desativados.', now)
+				counters['skipped'] += 1
+				continue
+			if not appointment.whatsapp_reminder_opt_in:
+				self._cancel(reminder.pk, 'Cliente não autorizou o lembrete.', now)
+				counters['skipped'] += 1
+				continue
+			if now < reminder_at:
+				counters['skipped'] += 1
+				continue
+			if now >= appointment.start_datetime:
+				self._cancel(reminder.pk, 'O horário do agendamento já começou.', now)
 				counters['skipped'] += 1
 				continue
 			if options['dry_run']:
@@ -52,12 +62,14 @@ class Command(BaseCommand):
 				'appointment__business__whatsapp_integration',
 				'appointment__service',
 			).get(pk=reminder.pk)
-			if current_reminder.appointment.status != Appointment.Status.CONFIRMED:
-				AppointmentReminder.objects.filter(pk=reminder.pk).update(
-					status=AppointmentReminder.Status.CANCELLED,
-					claimed_at=None,
-					updated_at=now,
-				)
+			current_appointment = current_reminder.appointment
+			if (
+				current_appointment.status != Appointment.Status.CONFIRMED
+				or not current_appointment.business.whatsapp_reminders_enabled
+				or not current_appointment.whatsapp_reminder_opt_in
+				or now >= current_appointment.start_datetime
+			):
+				self._cancel(reminder.pk, 'O agendamento não está mais elegível para lembrete.', now)
 				counters['skipped'] += 1
 				continue
 			try:
@@ -102,6 +114,15 @@ class Command(BaseCommand):
 			pk=reminder_id,
 			status=AppointmentReminder.Status.PENDING,
 		).update(status=AppointmentReminder.Status.PROCESSING, claimed_at=now, updated_at=now) == 1
+
+	@staticmethod
+	def _cancel(reminder_id, reason, now):
+		AppointmentReminder.objects.filter(pk=reminder_id).update(
+			status=AppointmentReminder.Status.CANCELLED,
+			claimed_at=None,
+			last_error=reason,
+			updated_at=now,
+		)
 
 	@staticmethod
 	def _record_failure(reminder_id, message, retryable, now):

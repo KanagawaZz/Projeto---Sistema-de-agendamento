@@ -2,179 +2,163 @@
 
 ## Como usar este documento
 
-Este arquivo é um resumo operacional para uma nova sessão de desenvolvimento. O documento de princípios, requisitos e método de trabalho é `PromptMestre.md`; ele continua sendo a referência principal. Antes de alterar código, confirme o estado no repositório e siga o ciclo:
+Este é o resumo operacional para continuar o desenvolvimento. `PromptMestre.md` contém princípios, requisitos e método de trabalho. Antes de alterar código, confirme o estado no repositório e siga:
 
 `entender -> planejar -> implementar -> testar -> revisar -> documentar -> avançar`
 
-Não implemente várias funcionalidades de uma vez. Para cada etapa, explique brevemente o objetivo, altere somente o necessário, teste e atualize este documento.
+Trabalhe em uma etapa pequena por vez. Explique o objetivo e o critério de aceite antes do código; depois teste e atualize este documento.
 
 ## Produto e escopo
 
-O Agenda Fácil é um sistema web de agendamento e gestão de atendimentos para pequenos prestadores de serviços. O cliente agenda sem criar conta; o empreendedor administra o próprio negócio.
+O Agenda Fácil é um sistema web de agendamento para pequenos prestadores de serviços. O cliente agenda sem criar conta e o empreendedor administra o próprio negócio.
 
-Fluxo público principal:
+Fluxo público: `/book/<slug>/` -> serviço -> data/horário -> nome/telefone -> confirmação.
 
-`/book/<slug>/` -> escolher serviço -> escolher data e horário -> informar nome e telefone -> confirmar.
+MVP implementado:
 
-Escopo atual do MVP:
-
-- cadastro/login do empreendedor;
-- cadastro do negócio e slug público;
-- serviços ativos/inativos, preço, duração e margem;
+- autenticação do empreendedor e cadastro do negócio;
+- serviços, preços, duração, margem e ativação;
 - horários semanais com múltiplos intervalos;
-- disponibilidade e prevenção de conflitos;
-- agendamento público e manual;
-- cancelamento público por token e cancelamento administrativo;
-- agenda diária, estados `confirmado`, `cancelado`, `concluído` e `não compareceu`;
-- cadastro/histórico simples de clientes por telefone;
-- notificações internas no dashboard;
+- disponibilidade, conflitos e reservas públicas/manuais;
+- cancelamento público por token e administrativo;
+- agenda diária e estados confirmado, cancelado, concluído e não compareceu;
+- clientes por telefone e histórico simples;
+- notificações internas;
 - página pública estruturada e personalizável;
 - contato manual via `wa.me`;
-- base de lembretes automáticos via WhatsApp Business Cloud API.
+- base de lembretes automáticos via Evolution API self-hosted.
 
-Fora do escopo atual: pagamentos, financeiro, Google Calendar, SMS, marketplace, aplicativo mobile, múltiplos profissionais, fila, lista de espera, feriados/bloqueios por data, relatórios avançados e upload de HTML/ZIP/JavaScript do usuário.
+Fora do escopo: pagamentos, financeiro, Google Calendar, SMS, marketplace, aplicativo mobile, múltiplos profissionais, fila, lista de espera, feriados/bloqueios por data, relatórios avançados e upload de HTML/ZIP/JavaScript do usuário.
 
 ## Stack e ambiente
 
-- Python 3.13.1 e Django 6.1.
-- Django Templates, HTML, CSS e JavaScript Vanilla.
-- SQLite no desenvolvimento; ORM relacional do Django.
-- Autenticação nativa do Django, sem usuário customizado.
-- Ambiente virtual: `.venv`.
-- Idioma: `pt-br`; timezone: `America/Cuiaba`; `USE_TZ = True`.
-- Arquivos estáticos em `static/`, templates globais em `templates/`.
-- Dependências em `requirements.txt`; banco local em `db.sqlite3`.
+- Python 3.13.1, Django 6.1, Django Templates, HTML, CSS e JavaScript Vanilla.
+- SQLite no desenvolvimento; ORM do Django.
+- Autenticação nativa; um negócio por usuário.
+- `.venv`, `requirements.txt`, `db.sqlite3`.
+- Idioma `pt-br`, timezone `America/Cuiaba`, `USE_TZ = True`.
+- Templates globais em `templates/`, estáticos em `static/`.
 
-Comandos básicos:
+Comandos:
 
 ```text
-python manage.py check
-python manage.py makemigrations --check
-python manage.py test
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py makemigrations --check
+.\.venv\Scripts\python.exe manage.py test
 ```
 
 ## Estado implementado
 
-### Domínio e autorização
+### Domínio
 
-Os principais modelos estão em `agenda/models.py`:
+Modelos principais em `agenda/models.py`: `Business`, `Service`, `WorkingDay`, `WorkingHours`, `Appointment`, `Customer`, `BusinessPage`, `BusinessNotification`, `WhatsAppIntegration` e `AppointmentReminder`.
 
-- `Business`: um por usuário (`User.owner` com `OneToOneField`), identificado por slug único.
-- `Service`: pertence a um negócio; `operational_minutes = duration_minutes + buffer_minutes`.
-- `WorkingDay` e `WorkingHours`: configuração semanal, dias fechados e intervalos.
-- `Appointment`: negócio, serviço, cliente, horário, snapshot de nome/telefone, status e token de cancelamento.
-- `Customer`: telefone normalizado e único dentro de cada negócio.
-- `BusinessPage`: campos estruturados da página pública e temas fixos.
-- `BusinessNotification`: notificações internas isoladas por negócio.
-- `WhatsAppIntegration` e `AppointmentReminder`: conexão, consentimento e processamento de lembretes.
+As operações administrativas estão em `agenda/views.py` e `agenda/urls.py`, protegidas por login, pertencimento ao negócio, POST e CSRF. Nunca expor dados de outro negócio.
 
-Views e rotas estão em `agenda/views.py` e `agenda/urls.py`. Operações administrativas são protegidas por login, pertencimento ao negócio, `POST` e CSRF. Consultas de negócio nunca devem aceitar objetos de outro proprietário.
-
-### Agendamento e disponibilidade
+### Agendamento
 
 A regra central está em `agenda/services.py`:
 
-- horários são `datetime` aware no timezone local;
-- a granularidade padrão é 15 minutos e pertence ao `Business`;
-- o serviço precisa estar ativo e pertencer ao negócio;
-- o tempo operacional precisa caber integralmente em um único intervalo;
-- a margem ocupa o período posterior ao atendimento;
-- intervalos sobrepostos são inválidos; intervalos adjacentes são permitidos;
-- horários passados não são oferecidos;
-- somente agendamentos `CONFIRMED` bloqueiam disponibilidade;
-- conflitos usam sobreposição estrita; cancelamentos liberam o horário;
-- toda confirmação passa por `create_confirmed_appointment()`, que abre transação, revalida disponibilidade e cria o cliente/agendamento/notificação.
+- horários são aware no timezone local;
+- granularidade padrão de 15 minutos por negócio;
+- serviço deve estar ativo e pertencer ao negócio;
+- tempo operacional = duração + margem e deve caber em um intervalo;
+- intervalos sobrepostos são inválidos; adjacentes são permitidos;
+- somente agendamentos confirmados bloqueiam horários;
+- conflitos usam sobreposição estrita;
+- confirmações passam por transação, revalidação e criação do cliente/agendamento/notificação.
 
-No SQLite, a concorrência entre múltiplos processos é limitada. A validação real com `select_for_update()` deve ser feita em PostgreSQL antes da produção.
+SQLite limita concorrência entre processos; validar PostgreSQL antes da produção.
 
-### Página pública
+### Evolution API
 
-A rota `/book/<slug>/` renderiza `BusinessPage` com fallback para nome e descrição de `Business`. A página aceita apenas dados estruturados e temas fixos. Não executar conteúdo enviado pelo empreendedor na mesma origem: não adicionar upload de HTML, CSS, JavaScript, ZIP ou iframe sem uma arquitetura isolada e revisão de segurança específica.
+A decisão atual é Evolution API v2.3.7 self-hosted com Baileys, Docker e PostgreSQL, em servidor separado do Django. O cliente REST usa:
 
-### WhatsApp
+- `EVOLUTION_API_URL` e `EVOLUTION_API_KEY` no ambiente do Django;
+- header `apikey`;
+- estado por `GET /instance/connectionState/{instanceName}`;
+- conexão por `GET /instance/connect/{instanceName}`;
+- envio por `POST /message/sendText/{instanceName}`;
+- payload de texto simples e `provider_message_id`;
+- QR Code/pairing code apenas na resposta, sem persistência.
 
-`Business.whatsapp_phone` serve para links manuais `wa.me`; não é a identidade de envio da API. O envio automático usa `WhatsAppIntegration`, token referenciado por variável de ambiente `WHATSAPP_TOKEN_BUSINESS_<id>` e o comando `send_whatsapp_reminders`.
+A instância local `agenda-facil` retornou estado `open`. Uma mensagem real de teste foi enviada e recebida no número autorizado. Nenhum lembrete automático de cliente foi enviado.
 
-Regras atuais:
+O empreendedor configura apenas o nome da instância no painel. A API key nunca aparece no frontend nem é salva pelo formulário.
 
-- lembrete exige consentimento explícito do cliente;
-- agendamento válido não depende de API externa;
-- processamento ocorre fora da requisição web;
-- há status, tentativas, retry limitado, claim e unicidade por agendamento/tipo;
-- cancelamento invalida lembretes pendentes/em processamento;
-- `--dry-run` não faz chamadas externas;
-- testes da Meta são simulados.
+### Lembretes
 
-Ainda não está pronto para uso real: faltam scheduler documentado, rate limiting, revogação de consentimento, histórico operacional no painel, webhooks de entrega/leitura, secret manager e configuração externa da Meta/template. Não enviar mensagens reais durante testes.
+- `Business.whatsapp_reminder_message` é configurável.
+- Placeholders permitidos: `{cliente}`, `{servico}`, `{data}`, `{hora}`, `{negocio}`.
+- O formulário mostra prévia local com dados fictícios usando `textContent`.
+- O cliente precisa consentir explicitamente.
+- O envio ocorre somente pelo comando assíncrono `send_whatsapp_reminders`.
+- `--dry-run` não envia mensagens.
+- Há claim, retry limitado, prevenção de duplicidade e tratamento de resultado desconhecido.
+- Lembretes inelegíveis são cancelados com motivo; os fora da janela continuam pendentes.
+- O painel exibe os 50 lembretes mais recentes do próprio negócio com status, tentativas, datas e erro.
 
-## Regras de continuidade
+## Segurança e decisões
 
-1. Corrigir a causa raiz, preservando simplicidade e APIs existentes quando possível.
-2. Não criar abstrações, APIs, bibliotecas ou funcionalidades futuras sem necessidade concreta.
-3. Revalidar regras temporais com testes; usar timezone do Django, nunca horários improvisados.
-4. Manter isolamento entre negócios em models, forms, views, queries e templates.
-5. Integrações externas devem ser desacopladas, idempotentes e incapazes de impedir a criação de um agendamento.
-6. Alterações de negócio importantes exigem teste e atualização deste contexto.
-7. Antes de código: objetivo, arquivos envolvidos, regra e critério de aceite. Depois: teste, revisão curta e documentação.
+- Não executar código enviado pelo usuário na mesma origem; não aceitar HTML, ZIP, JavaScript ou iframe personalizado.
+- Integrações externas não podem bloquear a criação do agendamento.
+- API keys, senhas e volumes não entram no Git.
+- `Business.whatsapp_phone` é somente contato manual `wa.me`, não identidade da API.
+- Cada negócio deve usar uma instância Evolution própria em produção.
+- A sessão da Evolution é preservada pelos volumes Docker.
+- Não habilitar lembretes para clientes reais antes da revisão operacional.
 
-## Validação e pontos conhecidos
+## Arquivos de infraestrutura
 
-Último estado registrado: `python manage.py check`, `python manage.py makemigrations --check` e a suíte de testes passaram; a última suíte completa registrada tinha 67 testes. Confirme novamente antes de confiar nesse número, pois o código pode ter mudado.
+- `docker-compose.yml`: Evolution, PostgreSQL, volumes, healthcheck e rede.
+- `.env.evolution.example`: modelo de configuração.
+- `.env.evolution`: configuração local ignorada pelo Git; contém secrets e não deve ser compartilhada.
+- `start-evolution.ps1`: valida Docker/configuração e inicia os containers.
+- `run-reminders-dry-run.ps1`: carrega a API key em memória e executa o comando sem envio.
+- `EVOLUTION_API_LOCAL.md`: instalação, retomada, configuração Django e dry-run.
 
-Débitos técnicos relevantes:
+## Validação e débitos
 
-- validar concorrência real em PostgreSQL;
-- tornar `slot_granularity_minutes` editável no `BusinessForm`, se isso for necessário ao usuário;
-- decidir estratégia de produção para secrets, banco e scheduler;
-- tratar o caso de resultado externo desconhecido após a API aceitar uma mensagem;
-- o token de cancelamento é bearer token sem expiração/rotação;
-- não há constraints de banco para conflitos temporais.
+Último estado: migrações aplicadas até 0015; `check` passou; `makemigrations --check` passou; suíte completa passou com 78 testes; sintaxe dos scripts PowerShell passou.
 
-## Decisões já fechadas
+Débitos relevantes:
 
-- autenticação nativa e um negócio por usuário;
-- slug automático preservado após edição;
-- tempo operacional derivado, não armazenado;
-- horários semanais em `WorkingDay`/`WorkingHours`;
-- disponibilidade por intervalos contínuos e granularidade configurável;
-- margem aplicada após o atendimento;
-- novo agendamento nasce confirmado;
-- cancelamento permitido antes do início, sem prazo mínimo;
-- página pública renderizada por template confiável, sem código executável do usuário;
-- lembretes externos assíncronos, com consentimento explícito e controle de reprocessamento.
+- configurar scheduler real;
+- rate limiting e revogação de consentimento;
+- webhook, caso seja necessário para status de entrega/conexão;
+- revisar secrets, HTTPS e backup antes da produção;
+- validar concorrência em PostgreSQL;
+- tratar resultado externo desconhecido com procedimento operacional.
 
 ## Estado do trabalho
 
 ### CONCLUÍDO
 
-Fundação Django, autenticação, negócio, serviços, horários, disponibilidade, agendamento público/manual, agenda diária, estados de atendimento, clientes, notificações internas, UX responsiva, página pública estruturada e base da integração oficial de lembretes WhatsApp.
+Funcionalidades do MVP, integração Evolution, conexão/estado, envio controlado, mensagem configurável, prévia local, histórico administrativo e testes.
 
 ### EM DESENVOLVIMENTO
 
-Operação segura dos lembretes automáticos: a base de domínio, conexão, comando e testes existe, mas ainda faltam controles operacionais e configuração para produção.
+Operação segura dos lembretes automáticos. O envio foi validado manualmente, mas ainda não está habilitado para clientes reais.
 
 ### PENDENTE
 
-Executar e registrar uma nova validação completa; decidir e implementar somente o próximo incremento após revisar a operação dos lembretes.
+Documentar e validar a execução periódica do comando; revisar a ativação controlada.
 
 ### FUTURO
 
-Exceções de agenda, financeiro, múltiplos profissionais, pagamentos e demais itens fora do escopo listados acima.
+Webhooks, rate limiting, melhorias de consentimento, PostgreSQL de produção e funcionalidades fora do escopo.
 
 ## Próximo dia de trabalho
 
-### Etapa recomendada: observabilidade dos lembretes WhatsApp
+### Etapa recomendada: preparar operação dos lembretes
 
-Antes de qualquer nova funcionalidade de produto, concluir o menor incremento operacional da integração existente.
+1. Abrir o Docker Desktop e executar `./start-evolution.ps1`.
+2. Conferir se `.env.evolution` possui API key real, não o valor de exemplo.
+3. Iniciar o Django com `EVOLUTION_API_URL` e `EVOLUTION_API_KEY` configuradas.
+4. Executar `./run-reminders-dry-run.ps1` e conferir a saída, sem enviar mensagens.
+5. Revisar scheduler, secrets, consentimento, janela, cancelamento, claim e retry.
+6. Somente após confirmação explícita, planejar ativação controlada para um número autorizado.
 
-Sequência:
+Critério de conclusão: o comando pode ser executado em dry-run, os lembretes aparecem no histórico e nenhum segredo ou mensagem real é exposto sem autorização.
 
-1. Confirmar no código o fluxo do comando `send_whatsapp_reminders` e seus estados.
-2. Adicionar uma visualização administrativa simples dos lembretes do próprio negócio, mostrando status, tentativas, última tentativa e erro sanitizado.
-3. Criar testes de autorização, isolamento e renderização dos estados principais.
-4. Documentar como executar o comando periodicamente no ambiente de desenvolvimento, sem token real.
-5. Rodar `check`, `makemigrations --check` e `test`; revisar o diff.
-
-Critério de conclusão: o empreendedor consegue entender no painel se um lembrete está pendente, foi enviado, falhou ou foi cancelado, sem expor token nem dados de outro negócio. Não implementar rate limiting, webhook ou envio real na mesma etapa; registrar esses itens para a etapa seguinte.
-
-Ao terminar o dia, atualizar somente as seções `Validação e pontos conhecidos`, `Estado do trabalho` e `Próximo dia de trabalho`, mantendo este arquivo como um resumo atual e não como histórico detalhado.
+Ao final da sessão, atualize este documento mantendo apenas o estado atual, os débitos e a próxima etapa.

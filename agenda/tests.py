@@ -1,4 +1,5 @@
 import datetime
+import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -171,6 +172,44 @@ class AuthenticationTests(TestCase):
 		self.assertEqual(business.description, 'Novo texto')
 		self.assertEqual(business.slug, 'barbearia-do-joao')
 
+	def test_business_form_saves_custom_whatsapp_reminder_message(self):
+		user = User.objects.create_user(username='message-owner', password='Senha-forte-123')
+		Business.objects.create(owner=user, name='Barbearia Central')
+		self.client.force_login(user)
+
+		response = self.client.post(
+			'/business/',
+			{
+				'name': 'Barbearia Central',
+				'description': '',
+				'whatsapp_phone': '',
+				'whatsapp_reminders_enabled': '',
+				'whatsapp_reminder_lead_time_minutes': '30',
+				'whatsapp_reminder_message': 'Oi {cliente}, seu {servico} será em {data} às {hora}.',
+			},
+		)
+
+		self.assertRedirects(response, '/')
+		business = Business.objects.get(owner=user)
+		self.assertEqual(business.whatsapp_reminder_lead_time_minutes, 30)
+		self.assertEqual(business.whatsapp_reminder_message, 'Oi {cliente}, seu {servico} será em {data} às {hora}.')
+
+	def test_business_form_rejects_unknown_whatsapp_placeholder(self):
+		user = User.objects.create_user(username='invalid-message-owner', password='Senha-forte-123')
+		Business.objects.create(owner=user, name='Barbearia Central')
+		self.client.force_login(user)
+
+		response = self.client.post(
+			'/business/',
+			{
+				'name': 'Barbearia Central',
+				'whatsapp_reminder_message': 'Olá {cliente}, código {codigo}.',
+			},
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Use somente: {cliente}, {servico}, {data}, {hora} e {negocio}.')
+
 	def test_whatsapp_settings_save_connection_metadata_without_token(self):
 		user = User.objects.create_user(username='whatsapp-owner', password='Senha-forte-123')
 		business = Business.objects.create(owner=user, name='Barbearia Central')
@@ -179,14 +218,14 @@ class AuthenticationTests(TestCase):
 		response = self.client.post(
 			'/business/whatsapp/',
 			{
-				'phone_number_id': '123456789',
+				'instance_name': 'agenda-facil-central',
 			},
 		)
 
 		self.assertRedirects(response, '/business/whatsapp/')
 		integration = WhatsAppIntegration.objects.get(business=business)
-		self.assertEqual(integration.phone_number_id, '123456789')
-		self.assertEqual(integration.access_token_env_var, f'WHATSAPP_TOKEN_BUSINESS_{business.pk}')
+		self.assertEqual(integration.instance_name, 'agenda-facil-central')
+		self.assertEqual(integration.api_key_env_var, 'EVOLUTION_API_KEY')
 		self.assertEqual(integration.status, WhatsAppIntegration.Status.DISCONNECTED)
 
 	def test_whatsapp_validation_marks_connection_as_connected(self):
@@ -194,14 +233,14 @@ class AuthenticationTests(TestCase):
 		business = Business.objects.create(owner=user, name='Barbearia Central')
 		integration = WhatsAppIntegration.objects.create(
 			business=business,
-			phone_number_id='123456789',
-			access_token_env_var=f'WHATSAPP_TOKEN_BUSINESS_{business.pk}',
+			instance_name='agenda-facil-central',
+			api_key_env_var='EVOLUTION_API_KEY',
 		)
 		self.client.force_login(user)
 		response_mock = MagicMock()
-		response_mock.__enter__.return_value.read.return_value = b'{"id": "123456789"}'
+		response_mock.__enter__.return_value.read.return_value = b'{"instance": {"state": "open"}}'
 
-		with patch.dict('os.environ', {integration.access_token_env_var: 'token-value'}), patch(
+		with patch.dict('os.environ', {integration.api_key_env_var: 'token-value'}), patch(
 			'agenda.integrations.whatsapp.request.urlopen', return_value=response_mock,
 		) as urlopen:
 			response = self.client.post('/business/whatsapp/validate/')
@@ -211,15 +250,18 @@ class AuthenticationTests(TestCase):
 		self.assertEqual(integration.status, WhatsAppIntegration.Status.CONNECTED)
 		self.assertEqual(integration.last_error, '')
 		urlopen.assert_called_once()
-		self.assertEqual(urlopen.call_args.args[0].method, 'GET')
+		api_request = urlopen.call_args.args[0]
+		self.assertEqual(api_request.method, 'GET')
+		self.assertEqual(api_request.full_url, 'http://localhost:8080/instance/connectionState/agenda-facil-central')
+		self.assertEqual(api_request.get_header('Apikey'), 'token-value')
 
 	def test_whatsapp_validation_records_missing_token_without_external_call(self):
 		user = User.objects.create_user(username='whatsapp-missing-token', password='Senha-forte-123')
 		business = Business.objects.create(owner=user, name='Barbearia Central')
 		integration = WhatsAppIntegration.objects.create(
 			business=business,
-			phone_number_id='123456789',
-			access_token_env_var=f'WHATSAPP_TOKEN_BUSINESS_{business.pk}',
+			instance_name='agenda-facil-central',
+			api_key_env_var='EVOLUTION_API_KEY',
 		)
 		self.client.force_login(user)
 
@@ -229,8 +271,33 @@ class AuthenticationTests(TestCase):
 		self.assertRedirects(response, '/business/whatsapp/')
 		integration.refresh_from_db()
 		self.assertEqual(integration.status, WhatsAppIntegration.Status.ERROR)
-		self.assertIn('token', integration.last_error.lower())
+		self.assertIn('api key', integration.last_error.lower())
 		urlopen.assert_not_called()
+
+	def test_whatsapp_connect_displays_qr_code_without_persisting_it(self):
+		user = User.objects.create_user(username='whatsapp-connect', password='Senha-forte-123')
+		business = Business.objects.create(owner=user, name='Barbearia Central')
+		integration = WhatsAppIntegration.objects.create(
+			business=business,
+			instance_name='agenda-facil',
+			api_key_env_var='EVOLUTION_API_KEY',
+		)
+		self.client.force_login(user)
+		response_mock = MagicMock()
+		response_mock.__enter__.return_value.read.return_value = b'{"base64":"data:image/png;base64,qr-code","pairingCode":null}'
+
+		with patch.dict('os.environ', {'EVOLUTION_API_KEY': 'token-value'}), patch(
+			'agenda.integrations.whatsapp.request.urlopen', return_value=response_mock,
+		) as urlopen:
+			response = self.client.post('/business/whatsapp/connect/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'data:image/png;base64,qr-code')
+		integration.refresh_from_db()
+		self.assertEqual(integration.status, WhatsAppIntegration.Status.DISCONNECTED)
+		api_request = urlopen.call_args.args[0]
+		self.assertEqual(api_request.full_url, 'http://localhost:8080/instance/connect/agenda-facil')
+		self.assertEqual(api_request.get_header('Apikey'), 'token-value')
 
 	def test_business_page_uses_business_data_as_fallback(self):
 		user = User.objects.create_user(username='joao', password='Senha-forte-123')
@@ -1195,8 +1262,8 @@ class WhatsAppReminderTests(TestCase):
 		reminder = self.make_reminder()
 		WhatsAppIntegration.objects.create(
 			business=self.business,
-			phone_number_id='phone-number-id',
-			access_token_env_var='TEST_WHATSAPP_TOKEN',
+			instance_name='agenda-facil-central',
+			api_key_env_var='EVOLUTION_API_KEY',
 			status=WhatsAppIntegration.Status.CONNECTED,
 		)
 		with patch('agenda.management.commands.send_whatsapp_reminders.send_appointment_reminder', return_value='wamid.test') as send:
@@ -1215,8 +1282,112 @@ class WhatsAppReminderTests(TestCase):
 		with patch('agenda.management.commands.send_whatsapp_reminders.send_appointment_reminder') as send:
 			call_command('send_whatsapp_reminders')
 
-		self.assertEqual(reminder.status, AppointmentReminder.Status.PENDING)
+		reminder.refresh_from_db()
+		self.assertEqual(reminder.status, AppointmentReminder.Status.CANCELLED)
+		self.assertIn('confirmado', reminder.last_error)
 		send.assert_not_called()
+
+	def test_command_cancels_reminder_without_customer_consent(self):
+		from django.core.management import call_command
+
+		reminder = self.make_reminder()
+		reminder.appointment.whatsapp_reminder_opt_in = False
+		reminder.appointment.save(update_fields=['whatsapp_reminder_opt_in'])
+		with patch('agenda.management.commands.send_whatsapp_reminders.send_appointment_reminder') as send:
+			call_command('send_whatsapp_reminders')
+
+		reminder.refresh_from_db()
+		self.assertEqual(reminder.status, AppointmentReminder.Status.CANCELLED)
+		self.assertIn('autorizou', reminder.last_error)
+		send.assert_not_called()
+
+	def test_reminder_history_is_isolated_by_business(self):
+		from django.utils import timezone
+
+		own_reminder = self.make_reminder()
+		other_user = User.objects.create_user(username='other-reminder-owner', password='Senha-forte-123')
+		other_business = Business.objects.create(owner=other_user, name='Outro negócio')
+		other_service = Service.objects.create(
+			business=other_business,
+			name='Outro serviço',
+			price='30.00',
+			duration_minutes=30,
+		)
+		other_appointment = Appointment.objects.create(
+			business=other_business,
+			service=other_service,
+			start_datetime=timezone.now() + datetime.timedelta(minutes=30),
+			client_name='Cliente de outro negócio',
+			client_phone='5511888888888',
+		)
+		AppointmentReminder.objects.create(appointment=other_appointment)
+		self.client.force_login(self.user)
+
+		response = self.client.get('/business/whatsapp/reminders/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, own_reminder.appointment.client_name)
+		self.assertNotContains(response, 'Cliente de outro negócio')
+
+	def test_reminder_history_requires_login(self):
+		response = self.client.get('/business/whatsapp/reminders/')
+
+		self.assertRedirects(response, '/login/?next=/business/whatsapp/reminders/')
+
+	def test_evolution_client_sends_text_to_instance(self):
+		from agenda.integrations.whatsapp import send_appointment_reminder
+
+		reminder = self.make_reminder()
+		integration = WhatsAppIntegration.objects.create(
+			business=self.business,
+			instance_name='agenda-facil-central',
+			api_key_env_var='EVOLUTION_API_KEY',
+			status=WhatsAppIntegration.Status.CONNECTED,
+		)
+		response_mock = MagicMock()
+		response_mock.__enter__.return_value.read.return_value = b'{"key": {"id": "evolution-message-id"}}'
+
+		with patch.dict('os.environ', {'EVOLUTION_API_KEY': 'test-api-key'}), patch(
+			'agenda.integrations.whatsapp.request.urlopen', return_value=response_mock,
+		) as urlopen:
+			message_id = send_appointment_reminder(reminder)
+
+		self.assertEqual(message_id, 'evolution-message-id')
+		api_request = urlopen.call_args.args[0]
+		self.assertEqual(api_request.full_url, 'http://localhost:8080/message/sendText/agenda-facil-central')
+		self.assertEqual(api_request.get_header('Apikey'), 'test-api-key')
+		self.assertEqual(
+			json.loads(api_request.data.decode('utf-8')),
+			{
+				'number': '5511999999999',
+				'text': 'Olá, Maria Silva! Lembrete: seu atendimento de Corte clássico está marcado para '
+				f'{timezone.localtime(reminder.appointment.start_datetime):%d/%m/%Y às %H:%M}.',
+			},
+		)
+
+	def test_reminder_uses_business_message_template(self):
+		from agenda.integrations.whatsapp import send_appointment_reminder
+
+		self.business.whatsapp_reminder_message = 'Oi {cliente}, {servico} em {data} às {hora} - {negocio}.'
+		self.business.save(update_fields=['whatsapp_reminder_message'])
+		reminder = self.make_reminder()
+		integration = WhatsAppIntegration.objects.create(
+			business=self.business,
+			instance_name='agenda-facil-central',
+			api_key_env_var='EVOLUTION_API_KEY',
+			status=WhatsAppIntegration.Status.CONNECTED,
+		)
+		response_mock = MagicMock()
+		response_mock.__enter__.return_value.read.return_value = b'{"key": {"id": "message-template-test"}}'
+
+		with patch.dict('os.environ', {'EVOLUTION_API_KEY': 'test-api-key'}), patch(
+			'agenda.integrations.whatsapp.request.urlopen', return_value=response_mock,
+		) as urlopen:
+			send_appointment_reminder(reminder)
+
+		payload = json.loads(urlopen.call_args.args[0].data.decode('utf-8'))
+		local_start = timezone.localtime(reminder.appointment.start_datetime)
+		self.assertEqual(payload['text'], f'Oi Maria Silva, Corte clássico em {local_start:%d/%m/%Y} às {local_start:%H:%M} - Barbearia Central.')
 
 class AvailabilityTests(TestCase):
 	def setUp(self):

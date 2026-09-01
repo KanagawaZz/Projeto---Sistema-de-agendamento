@@ -22,6 +22,10 @@ class Business(models.Model):
 		default=20,
 		validators=[MinValueValidator(5), MaxValueValidator(1440)],
 	)
+	whatsapp_reminder_message = models.CharField(
+		max_length=500,
+		default='Olá, {cliente}! Lembrete: seu atendimento de {servico} está marcado para {data} às {hora}.',
+	)
 
 	def save(self, *args, **kwargs):
 		if not self.slug:
@@ -180,8 +184,8 @@ class WhatsAppIntegration(models.Model):
 		ERROR = 'error', 'Com erro'
 
 	business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name='whatsapp_integration')
-	phone_number_id = models.CharField(max_length=100, blank=True)
-	access_token_env_var = models.CharField(max_length=120, blank=True)
+	instance_name = models.CharField(max_length=100, blank=True)
+	api_key_env_var = models.CharField(max_length=120, blank=True)
 	status = models.CharField(max_length=20, choices=Status.choices, default=Status.DISCONNECTED)
 	last_error = models.CharField(max_length=255, blank=True)
 	last_checked_at = models.DateTimeField(null=True, blank=True)

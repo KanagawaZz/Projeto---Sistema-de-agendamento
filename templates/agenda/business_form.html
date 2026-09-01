@@ -10,9 +10,34 @@
     </div>
     <form method="post" class="form-panel stack-form">
         {% csrf_token %}
+        {% if form.whatsapp_reminder_message %}<p class="muted">Na mensagem, você pode usar: {cliente}, {servico}, {data}, {hora} e {negocio}.</p><div class="notice" id="reminder-preview" aria-live="polite"><span>Prévia da mensagem</span><p id="reminder-preview-text"></p></div>{% endif %}
         {{ form.as_p }}
         <button class="button button-primary" type="submit">Salvar informações</button>
     </form>
     {% if business %}<div class="notice"><span>Link público</span><a href="{% url 'public_services' business.slug %}">{% url 'public_services' business.slug %}</a></div>{% endif %}
 </div>
+{% if form.whatsapp_reminder_message %}
+<script>
+    const reminderMessage = document.getElementById('id_whatsapp_reminder_message');
+    const reminderPreview = document.getElementById('reminder-preview-text');
+    const previewValues = {
+        '{cliente}': 'Maria Silva',
+        '{servico}': 'Corte clássico',
+        '{data}': '30/08/2026',
+        '{hora}': '14:00',
+        '{negocio}': '{{ business.name|escapejs }}',
+    };
+
+    function updateReminderPreview() {
+        let preview = reminderMessage.value;
+        Object.entries(previewValues).forEach(([placeholder, value]) => {
+            preview = preview.split(placeholder).join(value);
+        });
+        reminderPreview.textContent = preview;
+    }
+
+    reminderMessage.addEventListener('input', updateReminderPreview);
+    updateReminderPreview();
+</script>
+{% endif %}
 {% endblock %}

@@ -14,9 +14,9 @@ from django.utils import timezone
 from .forms import AdminAppointmentForm, AppointmentForm, BusinessForm, BusinessPageForm, WhatsAppIntegrationForm
 from .forms import ServiceForm
 from .forms import WorkingDayForm, WorkingHoursFormSet
-from .models import Appointment, Business, BusinessNotification, BusinessPage, Service, WhatsAppIntegration, WorkingDay
+from .models import Appointment, AppointmentReminder, Business, BusinessNotification, BusinessPage, Service, WhatsAppIntegration, WorkingDay
 from .services import AppointmentUnavailableError, build_whatsapp_link, create_business_notification, create_confirmed_appointment, get_available_start_times
-from .integrations.whatsapp import WhatsAppProviderError, validate_whatsapp_connection
+from .integrations.whatsapp import WhatsAppProviderError, validate_whatsapp_connection, get_whatsapp_connection_data
 
 
 def signup(request):
@@ -73,10 +73,10 @@ def whatsapp_settings(request):
 	if request.method == 'POST':
 		form = WhatsAppIntegrationForm(request.POST, instance=integration)
 		if form.is_valid():
-			previous_phone_number_id = integration.phone_number_id
+			previous_instance_name = integration.instance_name
 			integration = form.save(commit=False)
-			integration.access_token_env_var = f'WHATSAPP_TOKEN_BUSINESS_{business.pk}'
-			if integration.phone_number_id != previous_phone_number_id:
+			integration.api_key_env_var = 'EVOLUTION_API_KEY'
+			if integration.instance_name != previous_instance_name:
 				integration.status = WhatsAppIntegration.Status.DISCONNECTED
 				integration.last_error = ''
 			integration.save()
@@ -95,7 +95,7 @@ def whatsapp_validate(request):
 		return redirect('business_form')
 	integration = WhatsAppIntegration.objects.filter(business=business).first()
 	if integration is None:
-		messages.error(request, 'Salve o ID do número antes de validar a conexão.')
+		messages.error(request, 'Salve o nome da instância antes de validar a conexão.')
 		return redirect('whatsapp_settings')
 	try:
 		validate_whatsapp_connection(integration)
@@ -111,6 +111,51 @@ def whatsapp_validate(request):
 	if integration.status == WhatsAppIntegration.Status.ERROR:
 		messages.error(request, integration.last_error)
 	return redirect('whatsapp_settings')
+
+
+@login_required
+def whatsapp_connect(request):
+	if request.method != 'POST':
+		return redirect('whatsapp_settings')
+	business = Business.objects.filter(owner=request.user).first()
+	if business is None:
+		return redirect('business_form')
+	integration = WhatsAppIntegration.objects.filter(business=business).first()
+	if integration is None:
+		messages.error(request, 'Salve o nome da instância antes de solicitar a conexão.')
+		return redirect('whatsapp_settings')
+	connection_data = None
+	try:
+		connection_data = get_whatsapp_connection_data(integration)
+	except WhatsAppProviderError as error:
+		messages.error(request, str(error))
+	return render(
+		request,
+		'agenda/whatsapp_settings.html',
+		{
+			'business': business,
+			'form': WhatsAppIntegrationForm(instance=integration),
+			'integration': integration,
+			'connection_data': connection_data,
+		},
+	)
+
+
+@login_required
+def whatsapp_reminder_list(request):
+	business = Business.objects.filter(owner=request.user).first()
+	if business is None:
+		return redirect('business_form')
+	reminders = AppointmentReminder.objects.filter(
+		appointment__business=business,
+	).select_related(
+		'appointment__service',
+	).order_by('-created_at')[:50]
+	return render(
+		request,
+		'agenda/whatsapp_reminder_list.html',
+		{'business': business, 'reminders': reminders},
+	)
 
 
 @login_required
